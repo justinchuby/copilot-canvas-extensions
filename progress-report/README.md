@@ -20,6 +20,7 @@ session.
 
 ## Agent actions
 
+- `read_report` loads the current brief before an update.
 - `update_report` publishes or partially updates the executive brief.
 - `record_event` appends a significant milestone, risk, decision, or scope
   change.
@@ -27,3 +28,6 @@ session.
 Report state is stored in the owning session workspace under
 `.progress-report/<reportId>.json`.
 
+The extension injects concise reporting guidance when each session starts.
+Agents are instructed to update at meaningful phase boundaries and completion,
+while avoiding routine tool-call logging.

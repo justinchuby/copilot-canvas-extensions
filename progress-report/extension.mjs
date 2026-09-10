@@ -460,6 +460,18 @@ async function startServer(instanceId, reportId) {
 }
 
 const session = await joinSession({
+    hooks: {
+        onSessionStart: async () => ({
+            additionalContext: [
+                "This session has a Progress Report canvas for concise executive engineering briefs.",
+                "For substantial multi-phase work, reuse one stable reportId and keep the brief current at meaningful phase boundaries.",
+                "Before publishing, call read_report so partial updates preserve existing context.",
+                "Use update_report for outcomes, workstream health, material risks, decisions, and next priorities.",
+                "Use record_event only for significant milestones, scope changes, risks, or decisions; never log routine tool calls.",
+                "At task completion, publish a final concise update. If no report canvas is open, do not interrupt small tasks just to create one.",
+            ].join(" "),
+        }),
+    },
     canvases: [
         createCanvas({
             id: "progress-report",
@@ -483,6 +495,15 @@ const session = await joinSession({
                 },
             },
             actions: [
+                {
+                    name: "read_report",
+                    description: "Read the current executive brief before publishing an update.",
+                    handler: async (ctx) => {
+                        const reportId = instanceReports.get(ctx.instanceId);
+                        if (!reportId) throw new Error(`Unknown progress report instance: ${ctx.instanceId}`);
+                        return structuredClone(await loadReport(reportId));
+                    },
+                },
                 {
                     name: "update_report",
                     description: "Publish a concise executive brief; prefer workstream summaries and top-five lists over task dumps.",
