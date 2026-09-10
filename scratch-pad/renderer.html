@@ -1,0 +1,438 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Scratch Pad</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+    body {
+      background: var(--background-color-default, #fff);
+      color: var(--text-color-default, #1f2328);
+      font: 13px/18px var(--font-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+    }
+    button, input {
+      color: inherit; background: var(--background-color-default, #fff);
+      border: 1px solid var(--border-color-default, #d0d7de); border-radius: 6px; font: inherit;
+    }
+    button { padding: 5px 8px; cursor: pointer; font-weight: 600; }
+    button:hover, button.active { border-color: var(--true-color-blue, #0969da); color: var(--true-color-blue, #0969da); }
+    button.primary { color: var(--color-white, #fff); background: var(--true-color-blue, #0969da); border-color: transparent; }
+    .app { display: grid; grid-template-rows: auto 1fr; width: 100%; height: 100%; }
+    .toolbar {
+      z-index: 20; display: flex; align-items: center; gap: 5px; padding: 7px;
+      border-bottom: 1px solid var(--border-color-default, #d0d7de);
+      background: color-mix(in srgb, var(--background-color-default, #fff) 94%, transparent);
+      overflow-x: auto;
+    }
+    .toolbar .title { min-width: 100px; margin-right: auto; padding: 0 5px; font-weight: 700; white-space: nowrap; }
+    .divider { width: 1px; height: 22px; margin: 0 2px; background: var(--border-color-default, #d0d7de); }
+    #viewport {
+      position: relative; overflow: hidden; cursor: grab;
+      background-color: var(--background-color-default, #fff);
+      background-image: radial-gradient(var(--border-color-default, #d0d7de) 1px, transparent 1px);
+      background-size: 20px 20px;
+    }
+    #viewport.panning { cursor: grabbing; }
+    #world { position: absolute; width: 2600px; height: 1800px; transform-origin: 0 0; }
+    #edges { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+    .edge { fill: none; stroke: var(--text-color-muted, #656d76); stroke-width: 2; }
+    .edge-label {
+      fill: var(--text-color-muted, #656d76); font-size: 11px; text-anchor: middle;
+      paint-order: stroke; stroke: var(--background-color-default, #fff); stroke-width: 4px;
+    }
+    .node {
+      position: absolute; min-width: 120px; min-height: 70px; padding: 10px;
+      border: 1px solid var(--border-color-default, #d0d7de); border-radius: 8px;
+      background: var(--background-color-default, #fff); box-shadow: 0 2px 7px #00000014;
+      cursor: move; user-select: none;
+    }
+    .node.selected { outline: 2px solid var(--true-color-blue, #0969da); outline-offset: 2px; }
+    .node.connect-source { outline: 3px solid #1a7f37; outline-offset: 2px; }
+    .node.note { transform: rotate(-.35deg); }
+    .node.process { border-radius: 999px; text-align: center; }
+    .node.decision { border-radius: 4px; border-width: 2px; }
+    .node.blue { background: color-mix(in srgb, var(--true-color-blue-muted, #ddf4ff) 70%, var(--background-color-default, #fff)); }
+    .node.green { background: #dafbe1; }
+    .node.yellow { background: #fff8c5; }
+    .node.red { background: var(--true-color-red-muted, #ffebe9); }
+    .node.purple { background: #fbefff; }
+    .node-title { font-weight: 700; outline: none; white-space: pre-wrap; }
+    .node-content { margin-top: 4px; color: var(--text-color-muted, #656d76); outline: none; white-space: pre-wrap; }
+    .node-title:focus, .node-content:focus { cursor: text; user-select: text; background: #ffffff66; border-radius: 3px; }
+    .port { position: absolute; right: -5px; top: calc(50% - 5px); width: 10px; height: 10px; border-radius: 50%; background: var(--true-color-blue, #0969da); opacity: 0; }
+    .node:hover .port, .connect-mode .port { opacity: 1; }
+    #empty {
+      position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none;
+      color: var(--text-color-muted, #656d76); text-align: center;
+    }
+    #empty strong { display: block; color: var(--text-color-default, #1f2328); font-size: 16px; }
+    .status {
+      position: absolute; z-index: 30; right: 10px; bottom: 10px; padding: 5px 8px;
+      border: 1px solid var(--border-color-default, #d0d7de); border-radius: 6px;
+      color: var(--text-color-muted, #656d76); background: var(--background-color-default, #fff);
+      pointer-events: none;
+    }
+    .popover {
+      position: absolute; z-index: 40; right: 10px; top: 52px; width: min(340px, calc(100% - 20px));
+      padding: 10px; border: 1px solid var(--border-color-default, #d0d7de); border-radius: 8px;
+      background: var(--background-color-default, #fff); box-shadow: 0 8px 24px #0002;
+    }
+    .popover[hidden] { display: none; }
+    .popover input { width: 100%; padding: 7px; margin-bottom: 7px; }
+  </style>
+</head>
+<body>
+<div class="app">
+  <nav class="toolbar">
+    <span class="title" id="boardTitle">Scratch Pad</span>
+    <button data-add="note">+ Note</button>
+    <button data-add="card">+ Card</button>
+    <button data-add="process">+ Process</button>
+    <button data-add="decision">+ Decision</button>
+    <span class="divider"></span>
+    <button id="connect">Connect</button>
+    <button id="arrange">Arrange</button>
+    <button id="delete">Delete</button>
+    <span class="divider"></span>
+    <button id="undo">Undo</button>
+    <button id="redo">Redo</button>
+    <button id="zoomOut">−</button>
+    <button id="zoomReset">100%</button>
+    <button id="zoomIn">+</button>
+    <button id="notify" class="primary">Tell agent</button>
+  </nav>
+  <div id="viewport">
+    <div id="world">
+      <svg id="edges">
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--text-color-muted, #656d76)"></path>
+          </marker>
+        </defs>
+      </svg>
+      <div id="nodes"></div>
+    </div>
+    <div id="empty"><div><strong>Start thinking visually</strong>Add a note, card, process, or decision.</div></div>
+    <div class="status" id="status">Ready</div>
+    <form class="popover" id="notifyForm" hidden>
+      <input id="notifyMessage" placeholder="What should the agent review or do?">
+      <button class="primary" type="submit">Send to agent</button>
+      <button id="cancelNotify" type="button">Cancel</button>
+    </form>
+  </div>
+</div>
+<script>
+const viewport = document.getElementById("viewport");
+const world = document.getElementById("world");
+const nodesLayer = document.getElementById("nodes");
+const edgesLayer = document.getElementById("edges");
+const status = document.getElementById("status");
+let board = { nodes: [], edges: [], revision: 0 };
+let selected = new Set();
+let connectSource = null;
+let connectMode = false;
+let scale = 1;
+let pan = { x: 20, y: 20 };
+let suppressRender = false;
+
+const id = prefix => prefix + "-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 7);
+const defaults = {
+  note: { title: "New note", content: "Double-click to edit", color: "yellow", width: 190, height: 110 },
+  card: { title: "Idea", content: "Describe the idea", color: "neutral", width: 220, height: 120 },
+  process: { title: "Process", content: "What happens here?", color: "blue", width: 210, height: 90 },
+  decision: { title: "Decision", content: "What needs to be decided?", color: "purple", width: 220, height: 120 },
+};
+
+function setStatus(message) {
+  status.textContent = message;
+  clearTimeout(setStatus.timer);
+  setStatus.timer = setTimeout(() => status.textContent = "Revision " + board.revision, 1800);
+}
+
+function applyTransform() {
+  world.style.transform = `translate(${pan.x}px, ${pan.y}px) scale(${scale})`;
+  document.getElementById("zoomReset").textContent = Math.round(scale * 100) + "%";
+}
+
+function nodeCenter(node, side) {
+  return {
+    x: node.x + (side === "left" ? 0 : node.width || 220),
+    y: node.y + (node.height || 110) / 2,
+  };
+}
+
+function renderEdges() {
+  edgesLayer.querySelectorAll(".dynamic").forEach(element => element.remove());
+  const byId = new Map(board.nodes.map(node => [node.id, node]));
+  for (const edge of board.edges) {
+    const fromNode = byId.get(edge.from);
+    const toNode = byId.get(edge.to);
+    if (!fromNode || !toNode) continue;
+    const from = nodeCenter(fromNode, "right");
+    const to = nodeCenter(toNode, "left");
+    const bend = Math.max(50, Math.abs(to.x - from.x) * .45);
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("class", "edge dynamic");
+    path.setAttribute("marker-end", "url(#arrow)");
+    path.setAttribute("d", `M ${from.x} ${from.y} C ${from.x + bend} ${from.y}, ${to.x - bend} ${to.y}, ${to.x} ${to.y}`);
+    edgesLayer.append(path);
+    if (edge.label) {
+      const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      label.setAttribute("class", "edge-label dynamic");
+      label.setAttribute("x", (from.x + to.x) / 2);
+      label.setAttribute("y", (from.y + to.y) / 2 - 6);
+      label.textContent = edge.label;
+      edgesLayer.append(label);
+    }
+  }
+}
+
+function render() {
+  if (suppressRender) return;
+  document.getElementById("boardTitle").textContent = board.title || "Scratch Pad";
+  document.getElementById("empty").hidden = board.nodes.length > 0;
+  nodesLayer.replaceChildren();
+  for (const node of board.nodes) {
+    const element = document.createElement("article");
+    element.className = `node ${node.type} ${node.color || "neutral"}`;
+    element.dataset.id = node.id;
+    element.style.left = node.x + "px";
+    element.style.top = node.y + "px";
+    element.style.width = (node.width || 220) + "px";
+    element.style.height = (node.height || 110) + "px";
+    if (selected.has(node.id)) element.classList.add("selected");
+    if (connectSource === node.id) element.classList.add("connect-source");
+
+    const title = document.createElement("div");
+    title.className = "node-title";
+    title.contentEditable = "true";
+    title.spellcheck = true;
+    title.textContent = node.title;
+    const content = document.createElement("div");
+    content.className = "node-content";
+    content.contentEditable = "true";
+    content.spellcheck = true;
+    content.textContent = node.content || "";
+    const port = document.createElement("span");
+    port.className = "port";
+    element.append(title, content, port);
+    nodesLayer.append(element);
+  }
+  world.classList.toggle("connect-mode", connectMode);
+  renderEdges();
+  setStatus("Revision " + board.revision);
+}
+
+async function mutate(payload) {
+  const response = await fetch("/mutate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || "Board update failed");
+  return result;
+}
+
+function viewportPoint(event) {
+  const rect = viewport.getBoundingClientRect();
+  return {
+    x: (event.clientX - rect.left - pan.x) / scale,
+    y: (event.clientY - rect.top - pan.y) / scale,
+  };
+}
+
+document.querySelectorAll("[data-add]").forEach(button => button.addEventListener("click", async () => {
+  const type = button.dataset.add;
+  const point = {
+    x: Math.round((viewport.clientWidth / 2 - pan.x) / scale - 100),
+    y: Math.round((viewport.clientHeight / 2 - pan.y) / scale - 50),
+  };
+  const node = { id: id(type), type, x: point.x, y: point.y, ...defaults[type] };
+  try {
+    await mutate({ type: "add", nodes: [node] });
+    selected = new Set([node.id]);
+  } catch (error) { setStatus(error.message); }
+}));
+
+nodesLayer.addEventListener("pointerdown", event => {
+  const element = event.target.closest(".node");
+  if (!element || event.target.isContentEditable) return;
+  event.stopPropagation();
+  const nodeId = element.dataset.id;
+  if (connectMode) {
+    if (!connectSource) {
+      connectSource = nodeId;
+      render();
+      setStatus("Select a destination node");
+    } else if (connectSource !== nodeId) {
+      mutate({ type: "add", edges: [{ id: id("edge"), from: connectSource, to: nodeId, label: "" }] })
+        .catch(error => setStatus(error.message));
+      connectSource = null;
+      connectMode = false;
+      document.getElementById("connect").classList.remove("active");
+    }
+    return;
+  }
+  if (!event.shiftKey) selected = new Set([nodeId]);
+  else if (selected.has(nodeId)) selected.delete(nodeId);
+  else selected.add(nodeId);
+  render();
+
+  const start = viewportPoint(event);
+  const originals = board.nodes.filter(node => selected.has(node.id)).map(node => ({ id: node.id, x: node.x, y: node.y }));
+  suppressRender = true;
+  element.setPointerCapture(event.pointerId);
+  const move = moveEvent => {
+    const point = viewportPoint(moveEvent);
+    const dx = point.x - start.x;
+    const dy = point.y - start.y;
+    for (const original of originals) {
+      const node = board.nodes.find(item => item.id === original.id);
+      node.x = Math.round(original.x + dx);
+      node.y = Math.round(original.y + dy);
+      const domNode = nodesLayer.querySelector(`[data-id="${CSS.escape(node.id)}"]`);
+      domNode.style.left = node.x + "px";
+      domNode.style.top = node.y + "px";
+    }
+    renderEdges();
+  };
+  const up = async () => {
+    element.removeEventListener("pointermove", move);
+    element.removeEventListener("pointerup", up);
+    suppressRender = false;
+    try {
+      await mutate({
+        type: "update",
+        nodes: originals.map(original => {
+          const node = board.nodes.find(item => item.id === original.id);
+          return { id: node.id, x: node.x, y: node.y };
+        }),
+      });
+    } catch (error) { setStatus(error.message); }
+  };
+  element.addEventListener("pointermove", move);
+  element.addEventListener("pointerup", up);
+});
+
+nodesLayer.addEventListener("focusout", event => {
+  const element = event.target.closest(".node");
+  if (!element || !event.target.isContentEditable) return;
+  const patch = { id: element.dataset.id };
+  if (event.target.classList.contains("node-title")) patch.title = event.target.textContent.trim();
+  else patch.content = event.target.textContent.trim();
+  mutate({ type: "update", nodes: [patch] }).catch(error => setStatus(error.message));
+});
+
+viewport.addEventListener("pointerdown", event => {
+  if (event.target.closest(".node") || event.target.closest(".popover")) return;
+  selected.clear();
+  render();
+  const start = { x: event.clientX, y: event.clientY, panX: pan.x, panY: pan.y };
+  viewport.classList.add("panning");
+  viewport.setPointerCapture(event.pointerId);
+  const move = moveEvent => {
+    pan.x = start.panX + moveEvent.clientX - start.x;
+    pan.y = start.panY + moveEvent.clientY - start.y;
+    applyTransform();
+  };
+  const up = () => {
+    viewport.classList.remove("panning");
+    viewport.removeEventListener("pointermove", move);
+    viewport.removeEventListener("pointerup", up);
+  };
+  viewport.addEventListener("pointermove", move);
+  viewport.addEventListener("pointerup", up);
+});
+
+viewport.addEventListener("wheel", event => {
+  if (!event.ctrlKey) return;
+  event.preventDefault();
+  const previous = scale;
+  scale = Math.min(2, Math.max(.35, scale * (event.deltaY < 0 ? 1.1 : .9)));
+  const rect = viewport.getBoundingClientRect();
+  const x = event.clientX - rect.left;
+  const y = event.clientY - rect.top;
+  pan.x = x - (x - pan.x) * scale / previous;
+  pan.y = y - (y - pan.y) * scale / previous;
+  applyTransform();
+}, { passive: false });
+
+document.getElementById("connect").addEventListener("click", event => {
+  connectMode = !connectMode;
+  connectSource = null;
+  event.currentTarget.classList.toggle("active", connectMode);
+  render();
+  setStatus(connectMode ? "Select source and destination nodes" : "Connect mode off");
+});
+
+document.getElementById("delete").addEventListener("click", () => {
+  if (!selected.size) return setStatus("Select nodes to delete");
+  mutate({ type: "remove", nodeIds: [...selected] }).catch(error => setStatus(error.message));
+  selected.clear();
+});
+
+document.getElementById("arrange").addEventListener("click", () =>
+  mutate({ type: "arrange" }).catch(error => setStatus(error.message)));
+
+for (const action of ["undo", "redo"]) {
+  document.getElementById(action).addEventListener("click", async () => {
+    const response = await fetch("/" + action, { method: "POST" });
+    if (!response.ok) setStatus("Unable to " + action);
+  });
+}
+
+function zoom(factor) {
+  scale = Math.min(2, Math.max(.35, factor));
+  applyTransform();
+}
+document.getElementById("zoomIn").addEventListener("click", () => zoom(scale * 1.2));
+document.getElementById("zoomOut").addEventListener("click", () => zoom(scale / 1.2));
+document.getElementById("zoomReset").addEventListener("click", () => { scale = 1; pan = { x: 20, y: 20 }; applyTransform(); });
+
+const notifyForm = document.getElementById("notifyForm");
+document.getElementById("notify").addEventListener("click", () => {
+  notifyForm.hidden = false;
+  document.getElementById("notifyMessage").focus();
+});
+document.getElementById("cancelNotify").addEventListener("click", () => notifyForm.hidden = true);
+notifyForm.addEventListener("submit", async event => {
+  event.preventDefault();
+  const message = document.getElementById("notifyMessage").value.trim();
+  const response = await fetch("/notify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message }),
+  });
+  notifyForm.hidden = true;
+  setStatus(response.ok ? "Agent notified" : "Could not notify agent");
+});
+
+document.addEventListener("keydown", event => {
+  if ((event.key === "Delete" || event.key === "Backspace") && !event.target.isContentEditable && selected.size) {
+    event.preventDefault();
+    document.getElementById("delete").click();
+  }
+  if (event.key === "Escape") {
+    connectMode = false;
+    connectSource = null;
+    selected.clear();
+    document.getElementById("connect").classList.remove("active");
+    render();
+  }
+});
+
+fetch("/state").then(response => response.json()).then(next => {
+  board = next;
+  render();
+  applyTransform();
+});
+new EventSource("/events").onmessage = event => {
+  board = JSON.parse(event.data);
+  render();
+};
+</script>
+</body>
+</html>

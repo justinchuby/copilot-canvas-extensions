@@ -7,6 +7,7 @@ Personal collection of Canvas extensions for GitHub Copilot.
 | Extension | Purpose | Install |
 | --- | --- | --- |
 | [Progress Report](progress-report/) | Interactive CTO-style engineering brief for outcomes, risks, decisions, and next steps. | [Install folder](https://github.com/justinchuby/copilot-canvas-extensions/tree/main/progress-report) |
+| [Scratch Pad](scratch-pad/) | Shared visual whiteboard for user-agent brainstorming, flows, and decisions. | [Install folder](https://github.com/justinchuby/copilot-canvas-extensions/tree/main/scratch-pad) |
 
 ## Layout
 
@@ -54,4 +55,3 @@ node scripts/validate.mjs
 - Persist user data by stable domain ID, never only by Canvas instance ID.
 - Use app theme tokens instead of hardcoded presentation styles where possible.
 - Never write to stdout from an extension process.
-
